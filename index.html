@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I'm Not a Robot</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background-color: #fff;
+    font-family: Roboto, Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 40px;
+    color: #000;
+    user-select: none;
+  }
+
+  .header { text-align: center; margin-bottom: 30px; }
+  .header h1 {
+    font-size: 28px;
+    font-weight: 400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .header p { font-size: 16px; color: #555; }
+
+  .robot-icon {
+    width: 28px; height: 28px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%234a90e2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3a7 7 0 0 1 7-7h1V5.73A2 2 0 0 1 10 4a2 2 0 0 1 2-2zM9 13a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>');
+    background-size: cover;
+  }
+
+  .captcha-box {
+    background: #f9f9f9;
+    border: 1px solid #d3d3d3;
+    border-radius: 3px;
+    width: 302px;
+    min-height: 76px;
+    box-shadow: 0 0 4px 1px rgba(0,0,0,0.08);
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .captcha-box.error { border-color: #d93025; }
+
+  .cb-wrapper {
+    width: 28px; height: 28px;
+    border: 2px solid #c1c1c1;
+    border-radius: 2px;
+    background: #fff;
+    cursor: pointer;
+    margin-right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .cb-wrapper:hover { border-color: #b2b2b2; }
+
+  .captcha-text { font-size: 14px; color: #000; flex-grow: 1; padding: 10px 0; line-height: 1.4; }
+
+  .logo { display: flex; flex-direction: column; align-items: center; width: 46px; flex-shrink: 0; margin-left: 10px; }
+  .logo img { width: 32px; height: 32px; object-fit: contain; margin-bottom: 3px; }
+  .logo-text { font-size: 9px; color: #555; font-family: Arial, sans-serif; letter-spacing: 0.5px; }
+
+  .error-text {
+    position: absolute;
+    top: 100%; left: 0; margin-top: 8px;
+    font-size: 12px; color: #d93025; display: none; width: 100%;
+  }
+
+  .checkmark {
+    width: 18px; height: 10px;
+    border-left: 3px solid #009d00;
+    border-bottom: 3px solid #009d00;
+    transform: rotate(-45deg) translate(2px, -2px);
+  }
+
+  .input-box {
+    width: 302px; padding: 10px; border: 1px solid #ccc;
+    border-radius: 3px; font-size: 14px; margin-bottom: 15px; outline: none;
+  }
+  .input-box:focus { border-color: #4285f4; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; width: 302px; margin-bottom: 15px; }
+  .grid-item {
+    aspect-ratio: 1; border: 1px solid #ccc; border-radius: 3px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 30px; cursor: pointer; background: #fff; transition: 0.1s;
+  }
+  .grid-item:hover { background: #f0f0f0; }
+  .grid-item.selected { border: 3px solid #4285f4; background: #e8f0fe; }
+
+  /* Для 15 уровня */
+  .btn-container { width: 302px; display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 15px; max-height: 300px; overflow-y: auto; }
+  .fake-btn {
+    padding: 4px 8px; font-size: 10px; background: #f1f1f1; border: 1px solid #ccc;
+    border-radius: 3px; cursor: pointer; color: #555;
+  }
+  .fake-btn:hover { background: #e0e0e0; }
+
+  .shake { animation: shake 0.2s; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25% { transform: translateX(-6px); }
+    75% { transform: translateX(6px); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><div class="robot-icon"></div> I'm Not a Robot</h1>
+  <p id="level-indicator">Level 1</p>
+</div>
+
+<div id="game-container"></div>
+
+<script>
+const logoPath = 'logo.png'; 
+let currentLevel = 0;
+const container = document.getElementById('game-container');
+const indicator = document.getElementById('level-indicator');
+
+function nextLevel() {
+  currentLevel++;
+  if (currentLevel >= 15) {
+    finishGame();
+    return;
+  }
+  renderLevel();
+}
+
+function createCaptchaBox(text, onVerify) {
+  const box = document.createElement('div');
+  box.className = 'captcha-box';
+  
+  const cb = document.createElement('div');
+  cb.className = 'cb-wrapper';
+  
+  const txt = document.createElement('div');
+  txt.className = 'captcha-text';
+  txt.innerHTML = text;
+  
+  const logo = document.createElement('div');
+  logo.className = 'logo';
+  logo.innerHTML = `<img src="${logoPath}" alt="reCAPTCHA"><div class="logo-text">reCAPTCHA</div>`;
+  
+  const err = document.createElement('div');
+  err.className = 'error-text';
+  
+  box.appendChild(cb);
+  box.appendChild(txt);
+  box.appendChild(logo);
+  box.appendChild(err);
+  
+  container.appendChild(box);
+
+  const handleVerify = () => {
+    err.style.display = 'none';
+    box.classList.remove('error');
+    
+    const result = onVerify();
+    if (result === true) {
+      cb.innerHTML = '<div class="checkmark"></div>';
+      txt.innerHTML = "Verified.";
+      setTimeout(nextLevel, 400);
+    } else {
+      box.classList.add('error', 'shake');
+      setTimeout(() => box.classList.remove('shake'), 200);
+      err.textContent = result || "Verification failed.";
+      err.style.display = 'block';
+    }
+  };
+
+  cb.addEventListener('click', handleVerify);
+  return { box, handleVerify };
+}
+
+const levels = [
+  // 1. Обычный чекбокс
+  {
+    init: () => {
+      createCaptchaBox("I'm not a robot", () => true);
+    }
+  },
+  // 2. Выбери кота среди кексов
+  {
+    init: () => {
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      const items = ['🧁','🧁','🧁','🧁','🐱','🧁','🧁','🧁','🧁'];
+      items.forEach((ic, i) => {
+        const div = document.createElement('div');
+        div.className = 'grid-item';
+        div.textContent = ic;
+        div.onclick = () => div.classList.toggle('selected');
+        grid.appendChild(div);
+      });
+      container.appendChild(grid);
+      createCaptchaBox("Select all cats", () => {
+        const selected = document.querySelectorAll('.grid-item.selected');
+        if (selected.length === 1 && selected[0].textContent === '🐱') return true;
+        return "Incorrect. Muffins are not cats.";
+      });
+    }
+  },
+  // 3. Введи текст (капча с искажением)
+  {
+    init: () => {
+      const img = document.createElement('div');
+      img.style.cssText = 'width:302px; height:60px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:24px; font-family:monospace; letter-spacing:5px; margin-bottom:15px; border:1px solid #ccc; border-radius:3px; color:#333; font-style:italic; font-weight:bold; transform:skewX(-10deg);';
+      img.textContent = 'X7K9P';
+      container.appendChild(img);
+
+      const inp = document.createElement('input');
+      inp.className = 'input-box';
+      inp.placeholder = 'Enter code';
+      container.appendChild(inp);
+
+      createCaptchaBox("Verify", () => {
+        if (inp.value.trim().toUpperCase() === 'X7K9P') return true;
+        return "Incorrect captcha.";
+      });
+    }
+  },
+  // 4. Слайдер (заблокирован, нужно кликнуть на цифру 50)
+  {
+    init: () => {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'width:302px; height:40px; background:#f9f9f9; border:1px solid #d3d3d3; border-radius:3px; margin-bottom:15px; position:relative; display:flex; align-items:center; justify-content:center; cursor:pointer; overflow:hidden;';
+      wrap.innerHTML = '<span style="color:#999; font-size:12px;">Slide to 50%</span>';
+      
+      // Прячем кликабельную цифру 50
+      const hidden50 = document.createElement('div');
+      hidden50.style.cssText = 'position:absolute; left:50%; top:0; width:20px; height:100%; z-index:10; cursor:pointer; transform:translateX(-50%);';
+      hidden50.addEventListener('click', () => nextLevel());
+      wrap.appendChild(hidden50);
+      
+      container.appendChild(wrap);
+
+      createCaptchaBox("Verify slider", () => {
+        return "Slider is broken. Find another way.";
+      });
+    }
+  },
+  // 5. Найди правильный ответ
+  {
+    init: () => {
+      const opts = ['4', '22', '5', 'Fish'].map(txt => {
+        const b = document.createElement('button');
+        b.className = 'fake-btn';
+        b.style.fontSize = '14px';
+        b.style.padding = '8px 16px';
+        b.textContent = txt;
+        b.onclick = () => b.classList.toggle('selected');
+        return b;
+      });
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; justify-content:center; width:302px;';
+      opts.forEach(b => row.appendChild(b));
+      container.appendChild(row);
+
+      createCaptchaBox("What is 2+2?", () => {
+        const selected = Array.from(document.querySelectorAll('.fake-btn.selected')).map(b => b.textContent);
+        if (selected.length === 1 && selected[0] === 'Fish') return true;
+        return "Incorrect. Math is a lie.";
+      });
+    }
+  },
+  // 6. Ловушка с "Ожиданием"
+  {
+    init: () => {
+      let hasWaited = false;
+      setTimeout(() => { hasWaited = true; }, 3000);
+      
+      createCaptchaBox("Please wait 3 seconds before clicking", () => {
+        if (!hasWaited) return "You clicked too fast. Robots are impatient.";
+        return true;
+      });
+    }
+  },
+  // 7. Пазл (выбери пустой квадрат)
+  {
+    init: () => {
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      for (let i = 0; i < 9; i++) {
+        const div = document.createElement('div');
+        div.className = 'grid-item';
+        // Квадрат 5 (индекс 4) пустой
+        div.textContent = i === 4 ? '' : '🧩';
+        div.onclick = () => div.classList.toggle('selected');
+        grid.appendChild(div);
+      }
+      container.appendChild(grid);
+      createCaptchaBox("Select the missing piece", () => {
+        const selected = Array.from(document.querySelectorAll('.grid-item.selected'));
+        if (selected.length === 1 && selected[0].textContent === '') return true;
+        return "Incorrect. You must select the void.";
+      });
+    }
+  },
+  // 8. Бегущая кнопка
+  {
+    init: () => {
+      const btn = document.createElement('div');
+      btn.className = 'grid-item';
+      btn.textContent = 'Click me';
+      btn.style.cssText = 'width:302px; height:50px; font-size:16px; margin-bottom:15px;';
+      container.appendChild(btn);
+
+      let clicked = false;
+      btn.addEventListener('mouseenter', () => {
+        if (clicked) return;
+        btn.style.transform = `translate(${Math.random()*100-50}px, ${Math.random()*100-50}px)`;
+      });
+      btn.addEventListener('click', () => {
+        clicked = true;
+        btn.style.transform = 'none';
+        btn.style.borderColor = '#4285f4';
+        btn.textContent = 'Clicked!';
+      });
+
+      createCaptchaBox("Catch the button", () => {
+        if (clicked) return true;
+        return "You didn't catch it.";
+      });
+    }
+  },
+  // 9. Введи текст, который нельзя прочитать (но он есть в подсказке)
+  {
+    init: () => {
+      const text = document.createElement('div');
+      text.style.cssText = 'font-size:12px; color:#555; margin-bottom:15px; text-align:center; width:302px;';
+      text.textContent = "Hint: The code is hidden in the text above this box.";
+      container.appendChild(text);
+      
+      const inp = document.createElement('input');
+      inp.className = 'input-box';
+      inp.placeholder = 'Enter secret code';
+      container.appendChild(inp);
+
+      createCaptchaBox("Enter code", () => {
+        // Ответ: HIDDEN
+        if (inp.value.trim().toUpperCase() === 'HIDDEN') return true;
+        return "You didn't read carefully.";
+      });
+    }
+  },
+  // 10. Клик по невидимому элементу (в углу)
+  {
+    init: () => {
+      const { box } = createCaptchaBox("Click the tiny dot in the corner", () => "You missed the dot.");
+      const dot = document.createElement('div');
+      dot.style.cssText = 'position:absolute; bottom:2px; right:2px; width:6px; height:6px; background:#fff; cursor:crosshair;';
+      dot.addEventListener('click', () => nextLevel());
+      box.appendChild(dot);
+    }
+  },
+  // 11. Логическая задача
+  {
+    init: () => {
+      createCaptchaBox("If a robot is not a human, and you are not a robot, what are you? (Hint: click checkbox)", () => true);
+    }
+  },
+  // 12. Выбери все квадраты, где НЕТ кота
+  {
+    init: () => {
+      const grid = document.createElement('div');
+      grid.className = 'grid';
+      for (let i = 0; i < 9; i++) {
+        const div = document.createElement('div');
+        div.className = 'grid-item';
+        div.textContent = i === 4 ? '🐱' : '🧁';
+        div.onclick = () => div.classList.toggle('selected');
+        grid.appendChild(div);
+      }
+      container.appendChild(grid);
+      createCaptchaBox("Select all muffins", () => {
+        const selected = Array.from(document.querySelectorAll('.grid-item.selected'));
+        if (selected.length === 8 && !selected.some(el => el.textContent === '🐱')) return true;
+        return "Incorrect. Muffins only.";
+      });
+    }
+  },
+  // 13. Найди баг (нажать на логотип)
+  {
+    init: () => {
+      const { box } = createCaptchaBox("There is a bug on this screen", () => "Bug not found.");
+      box.querySelector('.logo img').addEventListener('click', () => nextLevel());
+    }
+  },
+  // 14. Удерживай кнопку
+  {
+    init: () => {
+      const { box } = createCaptchaBox("Hold the checkbox for 1 second", () => "You didn't hold it.");
+      const cb = box.querySelector('.cb-wrapper');
+      let holdTimer;
+      cb.addEventListener('mousedown', () => {
+        holdTimer = setTimeout(() => nextLevel(), 1000);
+      });
+      cb.addEventListener('mouseup', () => clearTimeout(holdTimer));
+      cb.addEventListener('mouseleave', () => clearTimeout(holdTimer));
+    }
+  },
+  // 15. 100 кнопок (только одна правильная)
+  {
+    init: () => {
+      const btnContainer = document.createElement('div');
+      btnContainer.className = 'btn-container';
+      
+      const texts = [
+        "I am robot", "I am AI", "I am a teen", "I am a bot", 
+        "I am human", "I am a dog", "I am a toaster", "I am a fridge",
+        "I am a neural network", "I am a script", "I am a virus", "I am a chatbot"
+      ];
+
+      for (let i = 0; i < 100; i++) {
+        const b = document.createElement('div');
+        b.className = 'fake-btn';
+        let txt = texts[Math.floor(Math.random() * texts.length)];
+        
+        // Делаем одну кнопку правильной (например, на 42 индексе)
+        if (i === 42) txt = "I am human";
+        
+        b.textContent = txt;
+        b.onclick = () => {
+          if (txt === "I am human") {
+            nextLevel();
+          } else {
+            b.style.background = '#f8d7da';
+            b.style.color = '#721c24';
+            b.textContent = "Error: " + txt;
+          }
+        };
+        btnContainer.appendChild(b);
+      }
+      
+      container.appendChild(btnContainer);
+      createCaptchaBox("Find the one that says 'I am human'", () => "Use the buttons above.");
+    }
+  }
+];
+
+function renderLevel() {
+  container.innerHTML = '';
+  indicator.textContent = `Level ${currentLevel + 1}`;
+  levels[currentLevel].init();
+}
+
+function finishGame() {
+  indicator.textContent = "Verification Complete";
+  container.innerHTML = `
+    <div class="captcha-box" style="display:flex; justify-content:center; align-items:center; border-color:#009d00;">
+      <span style="color:#009d00; font-size:16px; font-weight:bold;">✓ You are human.</span>
+    </div>
+    <p style="margin-top:20px; font-size:12px; color:#555; text-align:center;">(Maybe.)</p>
+  `;
+}
+
+renderLevel();
+</script>
+</body>
+</html>
